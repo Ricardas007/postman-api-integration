@@ -4,17 +4,43 @@ on: push
 
 env:
   BASED_URI: https://simple-books-api.glitch.me
+  POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+  POSTMAN_COLLECTION_UID: '31058305-8a5e77b3-a1c9-4e0e-9900-4446daac1f85'
+  POSTMAN_ENVIROMENT_UID: '31058305-2ffadb1d-16ad-470d-a136-03fd42281671'
 
 jobs:
   automated-api-tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, window-latest]
     steps:
-      - uses: actions/checkout@v3
-      - name: Install Postman CLI
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+      - name: Install Newman
         run: |
-          curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
-      - name: Login to Postman CLI
-        run: postman login --with-api-key ${{ secrets.POSTMAN_API_KEY }}
+          npm install -g newman
+      - name: Install Newman reporter
+        run: |
+          npm install -g newman-report-html
+      - name: Fetch Postman collection
+        run: |
+          curl -X GET "https://api.getpostman.com/collections/${POSTMAN_COLLECTION_UID}" \
+          -H "X-Api-Key: ${POSTMAN_API_KEY}" > collection.json
+        shell: bash
+      - name: Fetch postman enviroment
+        run: |
+          curl -X GET "https://api.getpostman.com/enviroment/${POSTMAN_ENVIROMENT_UID}" \
+          -H "X-API-Key: ${POSTMAN_API_KEY}" > enviroment.json
+        shell: bash
       - name: Run API tests
-        run: |
-          postman collection run "31058305-8a5e77b3-a1c9-4e0e-9900-4446daac1f85" -e "31058305-2ffadb1d-16ad-470d-a136-03fd42281671"
+        run: | 
+          newman run collection.json --enviroment enviroment.json --repoters cli,html --reporter-html-export "./report.html" 
+      - name: Upload report
+        uses: actions/upload-artifact@v4        
+        with:           
+          name: report          
+          path: report.html
